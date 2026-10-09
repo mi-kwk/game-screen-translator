@@ -1,0 +1,17 @@
+name: Windows build
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet build src/GameScreenTranslator -c Release
+      - run: dotnet run --project tests/Smoke -c Release
+      - run: dotnet publish src/GameScreenTranslator -c Release -r win-x64 --self-contained true -o artifacts/win-x64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: game-screen-translator-win-x64
+          path: artifacts/win-x64
