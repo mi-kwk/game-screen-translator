@@ -52,13 +52,28 @@ public sealed class TranslationService(HttpClient client)
         - 画面の UI の断片(ボタン名、日付、数字だけの行、ゲームのロゴ、意味のない文字列)は省く。
         - 原文の意味を足したり減らしたりしない。否定・肯定を取り違えない。
         - 翻訳文だけを出力し、説明や前置きは書かない。
+
+        出力は読みやすい Markdown にする。
+        - 記事やセクションの見出しは「## 見出し」、小見出しは「### 小見出し」にする。
+        - 箇条書きは「- 」、番号付きの手順は「1. 」にする。
+        - Q&A の質問の文は **太字** にする。重要な語句だけを **太字** にしてよいが、使いすぎない。
+        - 段落の間は空行を入れる。原文にない表やコードブロックは作らない。
         """;
 
     public static string BuildSystemPrompt(AppSettings settings)
     {
         var prompt = BasePrompt;
-        if (!string.IsNullOrWhiteSpace(settings.GameName)) prompt += $"\n\n対象のゲーム:{settings.GameName.Trim()}";
-        if (!string.IsNullOrWhiteSpace(settings.Glossary)) prompt += "\n\n次の用語集に必ず従って訳す(左が英語、右が訳語):\n" + settings.Glossary.Trim();
+        var game = settings.CurrentGame;
+        if (game is not null)
+            prompt += $"\n\n対象のゲーム:{game.Name.Trim()}" + (string.IsNullOrWhiteSpace(game.Description) ? "" : $"({game.Description.Trim()})");
+        var common = settings.CommonGlossary.Trim();
+        var specific = game?.Glossary.Trim() ?? "";
+        if (common.Length > 0 || specific.Length > 0)
+        {
+            prompt += "\n\n次の用語集に必ず従って訳す(左が英語、右が訳語)。同じ語が両方にある場合は、ゲームの用語集を優先する。";
+            if (common.Length > 0) prompt += "\n\n[共通の用語集]\n" + common;
+            if (specific.Length > 0) prompt += $"\n\n[{game!.Name.Trim()} の用語集]\n" + specific;
+        }
         return prompt;
     }
 
@@ -124,9 +139,62 @@ public sealed class TranslationService(HttpClient client)
     }
 }
 
-public record AppSettings(string OllamaUrl, string Model, string GameName, string Glossary)
+/// <summary>ゲームごとの設定。名前と説明は翻訳の指示に入れ、単語辞書はそのゲームの用語集として使う。</summary>
+public record GameProfile(string Name, string Description, string Glossary);
+
+public record AppSettings
 {
-    public static AppSettings Default { get; } = new("http://127.0.0.1:11434", "gemma3:12b", "", "");
+    public string OllamaUrl { get; init; } = "http://127.0.0.1:11434";
+    public string Model { get; init; } = "gemma3:12b";
+    /// <summary>この PC の Ollama が止まっていたら自動で起動する。</summary>
+    public bool AutoStartOllama { get; init; } = true;
+    /// <summary>どのゲームでも使う単語辞書。</summary>
+    public string CommonGlossary { get; init; } = DefaultCommonGlossary;
+    public List<GameProfile> Games { get; init; } = [];
+    /// <summary>選んでいるゲームの名前。空なら共通の単語辞書だけを使う。</summary>
+    public string SelectedGame { get; init; } = "";
+    /// <summary>日本語訳の文字の大きさ。</summary>
+    public double FontSize { get; init; } = 17;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public GameProfile? CurrentGame => Games.FirstOrDefault(g => g.Name == SelectedGame);
+
+    public static AppSettings Default => new();
+
+    public const string DefaultCommonGlossary = """
+        patch notes = パッチノート
+        update = アップデート
+        hotfix = ホットフィックス
+        known issues = 既知の不具合
+        server maintenance = サーバーメンテナンス
+        season = シーズン
+        event = イベント
+        quest = クエスト
+        mission = ミッション
+        objective = 目標
+        XP / experience = 経験値
+        level up = レベルアップ
+        buff = バフ
+        nerf = ナーフ
+        cooldown = クールダウン
+        loot = 戦利品
+        drop = ドロップ
+        gear = 装備
+        inventory = インベントリ
+        crafting = クラフト
+        skin = スキン
+        cosmetics = 見た目のアイテム
+        matchmaking = マッチメイキング
+        lobby = ロビー
+        spawn / respawn = スポーン / リスポーン
+        friendly fire = フレンドリーファイア
+        recoil = リコイル
+        aim down sights (ADS) = ADS(サイトをのぞいて構える)
+        PvP / PvE = PvP / PvE(訳さない)
+        NPC = NPC(訳さない)
+        boss = ボス
+        stay tuned = 続報をお待ちください
+        """;
 }
 
 public static class SettingsStore
@@ -138,11 +206,33 @@ public static class SettingsStore
     {
         path ??= DefaultPath;
         if (!File.Exists(path)) return AppSettings.Default;
-        var loaded = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path)) ?? AppSettings.Default;
-        return new(
-            string.IsNullOrWhiteSpace(loaded.OllamaUrl) ? AppSettings.Default.OllamaUrl : loaded.OllamaUrl,
-            string.IsNullOrWhiteSpace(loaded.Model) ? AppSettings.Default.Model : loaded.Model,
-            loaded.GameName ?? "", loaded.Glossary ?? "");
+        var json = File.ReadAllText(path);
+        var node = JsonNode.Parse(json) as JsonObject;
+        var loaded = JsonSerializer.Deserialize<AppSettings>(json, Options) ?? AppSettings.Default;
+        var games = (loaded.Games ?? []).Where(g => g is not null && !string.IsNullOrWhiteSpace(g.Name))
+            .Select(g => g with { Description = g.Description ?? "", Glossary = g.Glossary ?? "" }).ToList();
+        var selected = loaded.SelectedGame ?? "";
+        // 以前の形式(ゲーム名と単語辞書が 1 つだけ)からの移行
+        if (node is not null && !node.ContainsKey("Games"))
+        {
+            var oldName = node["GameName"]?.GetValue<string>()?.Trim() ?? "";
+            var oldGlossary = node["Glossary"]?.GetValue<string>()?.Trim() ?? "";
+            if (oldName.Length > 0 || oldGlossary.Length > 0)
+            {
+                var name = oldName.Length > 0 ? oldName : "ゲーム 1";
+                games.Add(new GameProfile(name, "", oldGlossary));
+                selected = name;
+            }
+        }
+        return loaded with
+        {
+            OllamaUrl = string.IsNullOrWhiteSpace(loaded.OllamaUrl) ? AppSettings.Default.OllamaUrl : loaded.OllamaUrl,
+            Model = string.IsNullOrWhiteSpace(loaded.Model) ? AppSettings.Default.Model : loaded.Model,
+            CommonGlossary = node is not null && !node.ContainsKey("CommonGlossary") ? AppSettings.DefaultCommonGlossary : loaded.CommonGlossary ?? "",
+            Games = games,
+            SelectedGame = games.Any(g => g.Name == selected) ? selected : "",
+            FontSize = loaded.FontSize is >= 10 and <= 40 ? loaded.FontSize : AppSettings.Default.FontSize,
+        };
     }
 
     public static void Save(AppSettings settings, string? path = null)

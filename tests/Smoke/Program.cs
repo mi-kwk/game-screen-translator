@@ -11,7 +11,12 @@ using GameScreenTranslator;
 
 internal static class Program
 {
-    private static readonly AppSettings Settings = new("http://127.0.0.1:11434", "test-model", "Active Matter", "raid = レイド");
+    private static readonly AppSettings Settings = new()
+    {
+        OllamaUrl = "http://127.0.0.1:11434", Model = "test-model", CommonGlossary = "loot = 戦利品",
+        Games = [new GameProfile("Active Matter", "脱出型のマルチプレイ FPS", "raid = レイド"), new GameProfile("Other Game", "", "raid = 襲撃")],
+        SelectedGame = "Active Matter", FontSize = 20,
+    };
 
     [STAThread]
     private static int Main()
@@ -35,6 +40,12 @@ internal static class Program
             Console.WriteLine("PASS: local English OCR: " + recognized);
             VerifyOcrCleanup();
             VerifySettings();
+            VerifyPrompt();
+            VerifyMarkdown();
+            VerifyLauncher();
+            var settingsWindow = new SettingsWindow(Settings);
+            Console.WriteLine("PASS: settings window initializes");
+            settingsWindow.Close();
             VerifyTranslationAsync().GetAwaiter().GetResult();
             window.Close();
             return 0;
@@ -61,12 +72,55 @@ internal static class Program
         var path = Path.Combine(Path.GetTempPath(), "GameScreenTranslatorSmoke", Guid.NewGuid() + ".json");
         try
         {
-            if (SettingsStore.Load(path) != AppSettings.Default) throw new Exception("Default settings mismatch");
+            static string Json(AppSettings s) => System.Text.Json.JsonSerializer.Serialize(s);
+            if (Json(SettingsStore.Load(path)) != Json(AppSettings.Default)) throw new Exception("Default settings mismatch");
             SettingsStore.Save(Settings, path);
-            if (SettingsStore.Load(path) != Settings) throw new Exception("Settings round trip failed");
+            if (Json(SettingsStore.Load(path)) != Json(Settings)) throw new Exception("Settings round trip failed");
             Console.WriteLine("PASS: settings save and load");
+
+            // 以前の形式(ゲーム名と単語辞書が 1 つだけ)からの移行
+            File.WriteAllText(path, "{\"OllamaUrl\":\"http://127.0.0.1:11434\",\"Model\":\"gemma3:12b\",\"GameName\":\"Active Matter\",\"Glossary\":\"raid = レイド\"}");
+            var migrated = SettingsStore.Load(path);
+            if (migrated.CurrentGame is not { Name: "Active Matter", Glossary: "raid = レイド" } || migrated.CommonGlossary != AppSettings.DefaultCommonGlossary || !migrated.AutoStartOllama)
+                throw new Exception("Migration failed: " + Json(migrated));
+            Console.WriteLine("PASS: migrate settings from the previous version");
         }
         finally { if (File.Exists(path)) File.Delete(path); }
+    }
+
+    private static void VerifyPrompt()
+    {
+        var prompt = TranslationService.BuildSystemPrompt(Settings);
+        if (!prompt.Contains("対象のゲーム:Active Matter(脱出型のマルチプレイ FPS)") || !prompt.Contains("[共通の用語集]\nloot = 戦利品")
+            || !prompt.Contains("[Active Matter の用語集]\nraid = レイド") || prompt.Contains("襲撃") || !prompt.Contains("Markdown"))
+            throw new Exception("Prompt mismatch: " + prompt);
+        var none = TranslationService.BuildSystemPrompt(Settings with { SelectedGame = "" });
+        if (none.Contains("対象のゲーム") || none.Contains("raid") || !none.Contains("loot = 戦利品")) throw new Exception("Prompt without a game mismatch: " + none);
+        Console.WriteLine("PASS: prompt uses the common glossary and only the selected game's glossary");
+    }
+
+    private static void VerifyMarkdown()
+    {
+        const string md = "## 戦闘と戦利品\n\n**質問の文**\n\n- 回答 1\n  - 入れ子\n- 回答 2\n\n1. 手順\n2. 手順\n\n> 引用\n\n---\n普通の段落で *斜体* と `code`。";
+        var doc = MarkdownView.ToDocument(md, 18);
+        var blocks = doc.Blocks.ToList();
+        if (blocks[0] is not System.Windows.Documents.Paragraph heading || heading.FontSize <= 18 || heading.FontWeight != FontWeights.Bold)
+            throw new Exception("Markdown heading");
+        var lists = blocks.OfType<System.Windows.Documents.List>().ToList();
+        if (lists.Count != 2 || lists[0].ListItems.Count != 2 || lists[1].MarkerStyle != TextMarkerStyle.Decimal
+            || !lists[0].ListItems.FirstListItem.Blocks.OfType<System.Windows.Documents.List>().Any())
+            throw new Exception("Markdown lists");
+        var plain = MarkdownView.ToPlainText(md);
+        if (plain.Contains("**") || plain.Contains("##") || !plain.Contains("・回答 1") || !plain.Contains("1. 手順") || !plain.StartsWith("戦闘と戦利品"))
+            throw new Exception("Markdown plain text: " + plain);
+        Console.WriteLine("PASS: Markdown rendering and plain text for copy");
+    }
+
+    private static void VerifyLauncher()
+    {
+        if (!OllamaLauncher.IsLocal("http://127.0.0.1:11434") || !OllamaLauncher.IsLocal("http://localhost:11434/") || OllamaLauncher.IsLocal("http://192.168.0.10:11434"))
+            throw new Exception("OllamaLauncher.IsLocal");
+        Console.WriteLine("PASS: auto start only for Ollama on this PC");
     }
 
     private static async Task VerifyTranslationAsync()
