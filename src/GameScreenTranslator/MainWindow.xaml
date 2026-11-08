@@ -1,9 +1,32 @@
-<Window x:Class="GameScreenTranslator.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="ゲーム画面翻訳" Width="1100" Height="760" MinWidth="760" MinHeight="560" Background="#F4F6FA" PreviewKeyDown="OnKeyDown" AllowDrop="True" Drop="OnDrop">
+<Window x:Class="GameScreenTranslator.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="ゲーム画面翻訳" Width="1180" Height="800" MinWidth="820" MinHeight="560" Background="#F4F6FA" PreviewKeyDown="OnKeyDown" AllowDrop="True" Drop="OnDrop">
 <Grid Margin="24"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
 <StackPanel><TextBlock Text="ゲーム画面翻訳" FontSize="28" FontWeight="Bold"/><TextBlock Margin="0,6,0,18" Text="Windows + Shift + S で撮影 → ここに Ctrl + V で貼り付け" Foreground="#526075"/></StackPanel>
-<WrapPanel x:Name="Actions" Grid.Row="1" Margin="0,0,0,16"><Button Content="画像を貼り付け" Click="PasteClick"/><Button Content="画像を開く" Click="OpenClick"/><Button Content="英語を読み取り" Click="OcrClick"/><Button Content="日本語に翻訳" Click="TranslateClick"/><Button Content="訳をコピー" Click="CopyClick"/><CheckBox x:Name="AutoTranslate" Content="読み取り後に自動翻訳" IsChecked="True" VerticalAlignment="Center"/></WrapPanel>
-<Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+<DockPanel Grid.Row="1" Margin="0,0,0,16">
+<StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+<TextBlock Text="ゲーム" VerticalAlignment="Center" Margin="0,0,8,0"/>
+<ComboBox x:Name="GameSelector" Width="200" Margin="0,0,8,0" VerticalContentAlignment="Center" Padding="6,5" SelectionChanged="GameSelectorChanged" ToolTip="選んだゲームの単語辞書と、共通の単語辞書を使って翻訳します"/>
+<Button Content="設定…" Click="SettingsClick" Margin="0"/>
+</StackPanel>
+<WrapPanel x:Name="Actions"><Button Content="画像を貼り付け" Click="PasteClick"/><Button Content="画像を開く" Click="OpenClick"/><Button Content="英語を読み取り" Click="OcrClick"/><Button Content="日本語に翻訳" Click="TranslateClick"/><Button Content="訳をコピー" Click="CopyClick"/><CheckBox x:Name="AutoTranslate" Content="読み取り後に自動翻訳" IsChecked="True" VerticalAlignment="Center"/></WrapPanel>
+</DockPanel>
+<Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition Width="5*"/><ColumnDefinition Width="18"/><ColumnDefinition Width="6*"/></Grid.ColumnDefinitions>
 <Border Background="White" CornerRadius="10" Padding="12"><Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><TextBlock Text="スクリーンショット" FontWeight="Bold" Margin="0,0,0,12"/><ScrollViewer Grid.Row="1"><Image x:Name="Preview" Stretch="Uniform"/></ScrollViewer></Grid></Border>
-<Grid Grid.Column="2"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><TextBlock Text="読み取った英語（修正して再翻訳できます）" Margin="0,0,0,8"/><TextBox x:Name="English" Grid.Row="1" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/><TextBlock Grid.Row="2" Text="日本語訳" Margin="0,16,0,8"/><TextBox x:Name="Japanese" Grid.Row="3" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/></Grid></Grid>
-<StackPanel Grid.Row="3" Margin="0,16,0,0"><Expander Header="DeepL APIの設定"><StackPanel Margin="0,10,0,10"><TextBlock Text="翻訳時は英文のみをDeepLに送信します。APIキーはこのWindowsユーザー用に暗号化して保存します。"/><DockPanel Margin="0,8,0,0"><Button DockPanel.Dock="Right" Content="設定を保存" Click="SaveClick"/><ComboBox x:Name="Plan" DockPanel.Dock="Right" Width="110" SelectedIndex="0" Margin="8,0"><ComboBoxItem Content="API Free"/><ComboBoxItem Content="API Pro"/></ComboBox><PasswordBox x:Name="ApiKey" Padding="8"/></DockPanel></StackPanel></Expander><TextBlock x:Name="Status" Margin="0,10,0,0" TextWrapping="Wrap" Text="画像を貼り付けてください。" Foreground="#385777"/></StackPanel>
+<Grid Grid.Column="2"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="2*"/><RowDefinition Height="Auto"/><RowDefinition Height="5*"/></Grid.RowDefinitions><TextBlock Text="読み取った英語（修正して再翻訳できます）" Margin="0,0,0,8"/><TextBox x:Name="English" Grid.Row="1" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontSize="14"/>
+<DockPanel Grid.Row="2" Margin="0,12,0,6" LastChildFill="True">
+<TextBlock Text="日本語訳" VerticalAlignment="Center" Margin="0,0,12,0"/>
+<StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+<Button x:Name="CancelButton" Content="中止 (Esc)" Click="CancelClick" Padding="12,4" Margin="0,0,12,0" Visibility="Collapsed" ToolTip="翻訳を止めます。途中までの訳は残ります。"/>
+<Button Content="A−" Click="SmallerClick" Padding="10,4" Margin="0,0,4,0" ToolTip="訳の文字を小さくする (Ctrl + −)"/>
+<Button Content="A＋" Click="LargerClick" Padding="10,4" Margin="0" ToolTip="訳の文字を大きくする (Ctrl + ＋)"/>
+</StackPanel>
+<StackPanel x:Name="Working" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
+<ProgressBar x:Name="WorkingBar" IsIndeterminate="True" Width="140" Height="8" Margin="0,0,10,0" Foreground="#3B82F6"/>
+<TextBlock x:Name="WorkingText" Foreground="#385777" VerticalAlignment="Center"/>
+</StackPanel>
+</DockPanel>
+<Border Grid.Row="3" Background="White" BorderBrush="#ABADB3" BorderThickness="1">
+<FlowDocumentScrollViewer x:Name="Japanese" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" IsToolBarVisible="False" Focusable="True"/>
+</Border>
+</Grid></Grid>
+<TextBlock x:Name="Status" Grid.Row="3" Margin="0,12,0,0" TextWrapping="Wrap" Text="画像を貼り付けてください。" Foreground="#385777"/>
 </Grid></Window>

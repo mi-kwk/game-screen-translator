@@ -1,0 +1,51 @@
+<Window x:Class="GameScreenTranslator.SettingsWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="翻訳の設定" Width="900" Height="720" MinWidth="700" MinHeight="560" Background="#F4F6FA" WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+<Grid Margin="20">
+<Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+
+<GroupBox Header="Ollama" Padding="10">
+<Grid>
+<Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+<Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+<TextBlock Grid.ColumnSpan="4" TextWrapping="Wrap" Foreground="#526075" Margin="0,0,0,6" Text="翻訳はこの PC の Ollama で行い、インターネットには送信しません。"/>
+<TextBlock Grid.Row="1" Text="モデル" VerticalAlignment="Center" Margin="0,0,8,0"/>
+<TextBox x:Name="Model" Grid.Row="1" Grid.Column="1" Margin="0,0,16,0" FontSize="14" Padding="6" ToolTip="例: gemma3:12b(RTX 3060 など)、gemma3:27b(RTX 3090 など)"/>
+<TextBlock Grid.Row="1" Grid.Column="2" Text="アドレス" VerticalAlignment="Center" Margin="0,0,8,0"/>
+<TextBox x:Name="OllamaUrl" Grid.Row="1" Grid.Column="3" FontSize="14" Padding="6"/>
+<CheckBox x:Name="AutoStart" Grid.Row="2" Grid.ColumnSpan="4" Margin="0,8,0,0" Content="Ollama が止まっていたら自動で起動する(このアプリが起動した Ollama は、アプリの終了時に止めます)"/>
+</Grid>
+</GroupBox>
+
+<GroupBox Grid.Row="1" Header="共通の単語辞書(どのゲームでも使います)" Padding="10" Margin="0,12,0,0">
+<DockPanel>
+<TextBlock DockPanel.Dock="Top" Foreground="#526075" Margin="0,0,0,6" Text="1 行に 1 語、「英語 = 訳語」の形で書きます。ゲームの単語辞書と同じ語がある場合は、ゲームのほうを優先します。"/>
+<TextBox x:Name="CommonGlossary" Height="130" FontSize="14" Padding="6" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/>
+</DockPanel>
+</GroupBox>
+
+<GroupBox Grid.Row="2" Header="ゲームごとの設定" Padding="10" Margin="0,12,0,0">
+<Grid>
+<Grid.ColumnDefinitions><ColumnDefinition Width="200"/><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+<DockPanel>
+<StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0"><Button Content="追加" Click="AddGameClick"/><Button x:Name="RemoveGame" Content="削除" Click="RemoveGameClick"/></StackPanel>
+<ListBox x:Name="Games" DisplayMemberPath="Name" SelectionChanged="GamesSelectionChanged" FontSize="14"/>
+</DockPanel>
+<Grid x:Name="GameEditor" Grid.Column="2">
+<Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+<Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+<TextBlock Text="ゲーム名" VerticalAlignment="Center" Margin="0,0,8,0"/>
+<TextBox x:Name="GameName" Grid.Column="1" FontSize="14" Padding="6" TextChanged="GameFieldChanged" ToolTip="例: Active Matter"/>
+<TextBlock Grid.Row="1" Text="説明" VerticalAlignment="Center" Margin="0,8,8,0"/>
+<TextBox x:Name="GameDescription" Grid.Row="1" Grid.Column="1" Margin="0,8,0,0" FontSize="14" Padding="6" TextChanged="GameFieldChanged" ToolTip="例: 脱出型のマルチプレイ FPS。ジャンルを書くと訳が自然になります"/>
+<TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="このゲームの単語辞書" Margin="0,10,0,6"/>
+<TextBox x:Name="GameGlossary" Grid.Row="3" Grid.ColumnSpan="2" FontSize="14" Padding="6" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" TextChanged="GameFieldChanged" ToolTip="例: raid = レイド"/>
+</Grid>
+<TextBlock x:Name="NoGame" Grid.Column="2" Foreground="#526075" TextWrapping="Wrap" VerticalAlignment="Center" HorizontalAlignment="Center" Text="「追加」でゲームを登録すると、ゲーム名・説明・単語辞書を設定できます。"/>
+</Grid>
+</GroupBox>
+
+<DockPanel Grid.Row="3" Margin="0,14,0,0">
+<TextBlock x:Name="Message" Foreground="#B91C1C" VerticalAlignment="Center" TextWrapping="Wrap"/>
+<StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right"><Button Content="保存" Click="SaveClick" IsDefault="True"/><Button Content="キャンセル" IsCancel="True" Margin="0"/></StackPanel>
+</DockPanel>
+</Grid>
+</Window>
