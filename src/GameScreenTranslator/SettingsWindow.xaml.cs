@@ -22,6 +22,7 @@ public partial class SettingsWindow : Window
         original = settings;
         Model.Text = settings.Model; OllamaUrl.Text = settings.OllamaUrl; AutoStart.IsChecked = settings.AutoStartOllama;
         CommonGlossary.Text = settings.CommonGlossary;
+        SaveHistory.IsChecked = settings.SaveHistory; EmbedModel.Text = settings.EmbedModel;
         WatchModel.Text = settings.WatchModel;
         WatchInterval.Text = settings.WatchIntervalSeconds.ToString("0.#");
         OverlayOpacity.Value = Math.Round(settings.OverlayOpacity * 100);
@@ -89,6 +90,7 @@ public partial class SettingsWindow : Window
         {
             Model = Model.Text.Trim(), OllamaUrl = OllamaUrl.Text.Trim(), AutoStartOllama = AutoStart.IsChecked == true,
             CommonGlossary = CommonGlossary.Text.Trim(), Games = list, SelectedGame = selected,
+            SaveHistory = SaveHistory.IsChecked == true, EmbedModel = string.IsNullOrWhiteSpace(EmbedModel.Text) ? AppSettings.Default.EmbedModel : EmbedModel.Text.Trim(),
             WatchModel = WatchModel.Text.Trim(), WatchIntervalSeconds = interval, OverlayOpacity = OverlayOpacity.Value / 100,
         };
         DialogResult = true;

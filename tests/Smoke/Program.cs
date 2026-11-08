@@ -45,6 +45,7 @@ internal static class Program
             VerifyPrompt();
             VerifyMarkdown();
             VerifyLauncher();
+            VerifyHistory();
             VerifyWatchHelpers();
             VerifyWatcherAsync().GetAwaiter().GetResult();
             var settingsWindow = new SettingsWindow(Settings);
@@ -174,6 +175,45 @@ internal static class Program
     }
 
     private static byte[] PixelsOf(BitmapSource frame) { var p = new byte[frame.PixelWidth * 4 * frame.PixelHeight]; frame.CopyPixels(p, frame.PixelWidth * 4, 0); return p; }
+
+    private static void VerifyHistory()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "GameScreenTranslatorSmoke", Guid.NewGuid() + ".db");
+        try
+        {
+            var store = new HistoryStore(path);
+            var a = store.Add("Active Matter", "貼り付け", "Brand-new monsters including much deadlier threats are in development.", "より手ごわいモンスターを開発中です。", new DateTime(2026, 11, 1));
+            var b = store.Add("Active Matter", "見張り", "Fixed issues near the extraction point on Dogorsk.", "Dogorsk の脱出地点付近の問題を修正しました。", new DateTime(2026, 11, 2));
+            var c = store.Add("Other", "貼り付け", "Server maintenance is scheduled.", "サーバーメンテナンスを予定しています。", new DateTime(2026, 11, 3));
+            // 同じゲーム・同じ英文(空白と大文字小文字の違いだけ)は 1 件にまとめて上書き
+            var again = store.Add("Active Matter", "見張り", "fixed issues   near the extraction point on Dogorsk.", "Dogorsk の脱出地点の近くの問題を直しました。", new DateTime(2026, 11, 4));
+            if (again != b || store.Count() != 3 || store.Recent()[0].Id != b || !store.Recent()[0].Japanese.Contains("直しました"))
+                throw new Exception("History add / merge");
+            if (store.Recent("Other").Count != 1 || !store.Games().SequenceEqual(new[] { "Active Matter", "Other" })) throw new Exception("History game filter");
+            // 意味の数値の代わりに、向きの違うベクトルを入れて検索の並びを確かめる
+            store.SetEmbeddings(a, ["より手ごわいモンスター"], [[1, 0, 0]], "test"); store.SetEmbeddings(b, ["脱出地点", "Dogorsk"], [[0, 1, 0], [0, 0.9f, 0.1f]], "test");
+            if (store.PendingEmbeddings("test").Single().Id != c) throw new Exception("History pending embeddings");
+            var semantic = store.Search("敵が強くなる", [0.9f, 0.1f, 0], null);
+            if (semantic.Count != 1 || semantic[0].Entry.Id != a || semantic[0].KeywordMatch) throw new Exception("History semantic search");
+            var keyword = store.Search("脱出地点", null, null);
+            if (keyword.Count != 1 || keyword[0].Entry.Id != b || !keyword[0].KeywordMatch) throw new Exception("History keyword search");
+            var english = store.Search("dogorsk", [1, 0, 0], "Active Matter");
+            if (english[0].Entry.Id != b || english.Count != 2) throw new Exception("History combined search: keyword first, then meaning");
+            store.Delete(c);
+            if (store.Count() != 2) throw new Exception("History delete");
+            store.Clear();
+            if (store.Count() != 0) throw new Exception("History clear");
+            // 長い段落をまとめると 300 文字を超えるようにして、見出しごとに分かれることを確かめる
+            var longText = string.Concat(Enumerable.Repeat("手ごわい敵を開発中です。", 20));
+            var chunks = HistoryStore.Chunk($"## 戦闘とモンスター\n\n**新しい敵は？**\n\n- {longText}\n\n---\n\n## 音楽\n\n新曲を 80 曲追加します。");
+            if (chunks.Count < 2 || !chunks[0].StartsWith("戦闘とモンスター\n新しい敵は？") || chunks.Any(c => c.Contains("**") || c.Contains("---"))
+                || !chunks[^1].Contains("新曲を 80 曲") || chunks.Any(c => c.Length > 460))
+                throw new Exception("History chunk: " + string.Join(" || ", chunks.Select(c => c.Replace('\n', '⏎'))));
+            if (Math.Abs(HistoryStore.Cosine([1, 2, 3], [2, 4, 6]) - 1) > 1e-6 || HistoryStore.Cosine([1, 0], [0, 1]) != 0) throw new Exception("Cosine");
+            Console.WriteLine("PASS: translation history save, merge, delete and search (meaning + words)");
+        }
+        finally { Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools(); if (File.Exists(path)) File.Delete(path); }
+    }
 
     private static void VerifyWatchHelpers()
     {

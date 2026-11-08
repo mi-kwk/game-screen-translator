@@ -17,6 +17,7 @@
 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
 <TextBlock Text="ゲーム" VerticalAlignment="Center" Margin="0,0,8,0"/>
 <ComboBox x:Name="GameSelector" Width="200" Margin="0,0,8,0" VerticalContentAlignment="Center" Padding="6,5" SelectionChanged="GameSelectorChanged" ToolTip="選んだゲームの単語辞書と、共通の単語辞書を使って翻訳します"/>
+<Button Content="履歴…" Click="HistoryClick" ToolTip="これまでの翻訳を、意味や言葉で探せます(履歴は PC の中だけに保存します)"/>
 <Button Content="設定…" Click="SettingsClick" Margin="0"/>
 </StackPanel>
 <WrapPanel x:Name="Actions"><Button Content="画像を貼り付け" Click="PasteClick"/><Button Content="画像を開く" Click="OpenClick"/><Button Content="英語を読み取り" Click="OcrClick"/><Button Content="日本語に翻訳" Click="TranslateClick"/><Button Content="訳をコピー" Click="CopyClick"/><CheckBox x:Name="AutoTranslate" Content="読み取り後に自動翻訳" IsChecked="True" VerticalAlignment="Center"/></WrapPanel>

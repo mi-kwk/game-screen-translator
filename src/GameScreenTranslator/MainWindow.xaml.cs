@@ -38,7 +38,7 @@ public partial class MainWindow : Window
         renderTimer.Tick += (_, _) => { renderTimer.Stop(); RenderTranslation(scrollToEnd: true); };
         InitializeWatch();
         Loaded += async (_, _) => await StartOllamaInBackgroundAsync();
-        Closed += (_, _) => { CloseWatch(); translation?.Cancel(); workingTimer.Stop(); renderTimer.Stop(); client.Dispose(); OllamaLauncher.StopStarted(); };
+        Closed += (_, _) => { CloseWatch(); historyWindow?.Close(); translation?.Cancel(); workingTimer.Stop(); renderTimer.Stop(); client.Dispose(); OllamaLauncher.StopStarted(); };
     }
 
     // ---- 設定とゲームの切り替え ----
@@ -175,6 +175,7 @@ public partial class MainWindow : Window
             }, cancel.Token);
             SetTranslation(result);
             Status.Text = $"翻訳が完了しました({(DateTime.Now - workingSince).TotalSeconds:F0} 秒)。{skippedNote}";
+            SaveToHistory(English.Text, result, "貼り付け");
         }
         catch (OperationCanceledException) when (cancel.IsCancellationRequested)
         {

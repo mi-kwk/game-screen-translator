@@ -213,6 +213,12 @@ public record AppSettings
     /// <summary>日本語訳の文字の大きさ。</summary>
     public double FontSize { get; init; } = 17;
 
+    // ---- 翻訳履歴 ----
+    /// <summary>翻訳が終わったら、英文と訳を PC の中に保存する。</summary>
+    public bool SaveHistory { get; init; } = true;
+    /// <summary>履歴を意味で探すための埋め込み用モデル(多言語対応で、日本語でも英文でも探せる)。</summary>
+    public string EmbedModel { get; init; } = "bge-m3";
+
     // ---- 画面の見張り ----
     /// <summary>見張るときに使うモデル(ゲームと GPU を分け合うので、小さめのモデルが向く)。</summary>
     public string WatchModel { get; init; } = "gemma3:12b";
@@ -301,6 +307,7 @@ public static class SettingsStore
             Games = games,
             SelectedGame = games.Any(g => g.Name == selected) ? selected : "",
             FontSize = loaded.FontSize is >= 10 and <= 40 ? loaded.FontSize : AppSettings.Default.FontSize,
+            EmbedModel = string.IsNullOrWhiteSpace(loaded.EmbedModel) ? AppSettings.Default.EmbedModel : loaded.EmbedModel,
             WatchModel = string.IsNullOrWhiteSpace(loaded.WatchModel) ? AppSettings.Default.WatchModel : loaded.WatchModel,
             WatchIntervalSeconds = Math.Clamp(loaded.WatchIntervalSeconds, 1, 10),
             OverlayOpacity = Math.Clamp(loaded.OverlayOpacity, 0.4, 1),

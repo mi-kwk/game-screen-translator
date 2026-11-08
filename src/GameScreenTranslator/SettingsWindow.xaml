@@ -5,8 +5,11 @@
 <GroupBox Header="Ollama" Padding="10">
 <Grid>
 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-<Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+<Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
 <TextBlock Grid.ColumnSpan="4" TextWrapping="Wrap" Foreground="#526075" Margin="0,0,0,6" Text="翻訳はこの PC の Ollama で行い、インターネットには送信しません。"/>
+<CheckBox x:Name="SaveHistory" Grid.Row="3" Grid.ColumnSpan="2" Margin="0,10,0,0" VerticalAlignment="Center" Content="翻訳を履歴に保存する(PC の中だけ)"/>
+<TextBlock Grid.Row="3" Grid.Column="2" Text="履歴の検索用モデル" VerticalAlignment="Center" Margin="0,10,8,0"/>
+<TextBox x:Name="EmbedModel" Grid.Row="3" Grid.Column="3" Margin="0,10,0,0" FontSize="14" Padding="6" ToolTip="履歴を意味で探すための埋め込み用モデル。多言語対応の bge-m3 がおすすめです"/>
 <TextBlock Grid.Row="1" Text="モデル" VerticalAlignment="Center" Margin="0,0,8,0"/>
 <TextBox x:Name="Model" Grid.Row="1" Grid.Column="1" Margin="0,0,16,0" FontSize="14" Padding="6" ToolTip="例: gemma3:12b(RTX 3060 など)、gemma3:27b(RTX 3090 など)"/>
 <TextBlock Grid.Row="1" Grid.Column="2" Text="アドレス" VerticalAlignment="Center" Margin="0,0,8,0"/>

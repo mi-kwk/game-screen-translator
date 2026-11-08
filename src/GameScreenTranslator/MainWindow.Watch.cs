@@ -17,9 +17,10 @@ public partial class MainWindow
         watcher = new ScreenWatcher(CaptureWatchRegionAsync, OcrService.ReadLayoutAsync, (text, onChunk, token) =>
             new TranslationService(client).TranslateAsync(text, settings with { Model = settings.WatchModel }, onChunk, token));
         watcher.StateChanged += (state, note) => { overlay?.SetState(state, note); UpdateWatchInfo(state, note); };
-        watcher.TranslationStarted += _ => overlay?.ShowTranslation("");
+        var watchEnglish = "";
+        watcher.TranslationStarted += text => { watchEnglish = text; overlay?.ShowTranslation(""); };
         watcher.Chunk += piece => overlay?.AppendTranslation(piece);
-        watcher.TranslationCompleted += result => overlay?.ShowTranslation(result);
+        watcher.TranslationCompleted += result => { overlay?.ShowTranslation(result); SaveToHistory(watchEnglish, result, "見張り"); };
         ApplyWatchSettings();
         UpdateWatchInfo(WatchState.Off, "");
         SourceInitialized += (_, _) =>
