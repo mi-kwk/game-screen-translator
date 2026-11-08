@@ -4,7 +4,16 @@
 <WrapPanel x:Name="Actions" Grid.Row="1" Margin="0,0,0,16"><Button Content="画像を貼り付け" Click="PasteClick"/><Button Content="画像を開く" Click="OpenClick"/><Button Content="英語を読み取り" Click="OcrClick"/><Button Content="日本語に翻訳" Click="TranslateClick"/><Button Content="訳をコピー" Click="CopyClick"/><CheckBox x:Name="AutoTranslate" Content="読み取り後に自動翻訳" IsChecked="True" VerticalAlignment="Center"/></WrapPanel>
 <Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
 <Border Background="White" CornerRadius="10" Padding="12"><Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><TextBlock Text="スクリーンショット" FontWeight="Bold" Margin="0,0,0,12"/><ScrollViewer Grid.Row="1"><Image x:Name="Preview" Stretch="Uniform"/></ScrollViewer></Grid></Border>
-<Grid Grid.Column="2"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><TextBlock Text="読み取った英語（修正して再翻訳できます）" Margin="0,0,0,8"/><TextBox x:Name="English" Grid.Row="1" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/><TextBlock Grid.Row="2" Text="日本語訳" Margin="0,16,0,8"/><TextBox x:Name="Japanese" Grid.Row="3" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/></Grid></Grid>
+<Grid Grid.Column="2"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><TextBlock Text="読み取った英語（修正して再翻訳できます）" Margin="0,0,0,8"/><TextBox x:Name="English" Grid.Row="1" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/>
+<DockPanel Grid.Row="2" Margin="0,12,0,6" LastChildFill="True">
+<TextBlock Text="日本語訳" VerticalAlignment="Center" Margin="0,0,12,0"/>
+<Button x:Name="CancelButton" DockPanel.Dock="Right" Content="中止 (Esc)" Click="CancelClick" Margin="0" Padding="12,4" Visibility="Collapsed" ToolTip="翻訳を止めます。途中までの訳は残ります。"/>
+<StackPanel x:Name="Working" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
+<ProgressBar x:Name="WorkingBar" IsIndeterminate="True" Width="140" Height="8" Margin="0,0,10,0" Foreground="#3B82F6"/>
+<TextBlock x:Name="WorkingText" Foreground="#385777" VerticalAlignment="Center"/>
+</StackPanel>
+</DockPanel>
+<TextBox x:Name="Japanese" Grid.Row="3" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/></Grid></Grid>
 <StackPanel Grid.Row="3" Margin="0,16,0,0">
 <Expander Header="翻訳の設定(Ollama)">
 <Grid Margin="0,10,0,10">

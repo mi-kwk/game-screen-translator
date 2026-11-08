@@ -2,6 +2,7 @@ using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -61,7 +62,10 @@ public sealed class TranslationService(HttpClient client)
         return prompt;
     }
 
-    public async Task<string> TranslateAsync(string text, AppSettings settings, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Ollama で翻訳する。訳はできたところから <paramref name="onChunk"/> に渡し、最後に訳全体を返す。
+    /// </summary>
+    public async Task<string> TranslateAsync(string text, AppSettings settings, Action<string>? onChunk = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(text)) throw new InvalidOperationException("翻訳する英語を入力してください。");
         if (string.IsNullOrWhiteSpace(settings.Model)) throw new InvalidOperationException("翻訳に使うモデルを設定してください(例: gemma3:12b)。");
@@ -71,26 +75,45 @@ public sealed class TranslationService(HttpClient client)
         var body = new JsonObject
         {
             ["model"] = model,
-            ["stream"] = false,
+            ["stream"] = true,
             ["messages"] = new JsonArray(
                 new JsonObject { ["role"] = "system", ["content"] = BuildSystemPrompt(settings) },
                 new JsonObject { ["role"] = "user", ["content"] = "次の英文を日本語に翻訳してください。\n\n" + text.Trim() }),
             ["options"] = new JsonObject { ["temperature"] = 0.2, ["num_ctx"] = 8192 },
         };
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint) { Content = JsonContent.Create(body) };
         HttpResponseMessage response;
-        try { response = await client.PostAsJsonAsync(endpoint, body, cancellationToken); }
+        try { response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken); }
         catch (HttpRequestException)
         { throw new InvalidOperationException("Ollama に接続できません。Ollama が起動しているか、設定のアドレスを確認してください。"); }
         using (response)
         {
-            var content = await response.Content.ReadAsStringAsync(cancellationToken);
             if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync(cancellationToken);
                 throw new InvalidOperationException(response.StatusCode == HttpStatusCode.NotFound
                     ? $"モデル「{model}」が見つかりません。コマンドプロンプトで「ollama pull {model}」を実行してください。"
-                    : $"翻訳に失敗しました(HTTP {(int)response.StatusCode})。{ErrorMessage(content)}");
-            var answer = JsonNode.Parse(content)?["message"]?["content"]?.GetValue<string>();
-            if (string.IsNullOrWhiteSpace(answer)) throw new InvalidOperationException("翻訳結果が空でした。もう一度翻訳してください。");
-            return answer.Trim();
+                    : $"翻訳に失敗しました(HTTP {(int)response.StatusCode})。{ErrorMessage(error)}");
+            }
+            // stream: true のとき、Ollama は 1 行に 1 つの JSON を返す。最後の行は "done": true。
+            var answer = new StringBuilder();
+            try
+            {
+                using var reader = new StreamReader(await response.Content.ReadAsStreamAsync(cancellationToken), Encoding.UTF8);
+                while (await reader.ReadLineAsync(cancellationToken) is { } line)
+                {
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+                    var node = JsonNode.Parse(line);
+                    if (node?["error"]?.GetValue<string>() is { } streamError) throw new InvalidOperationException("翻訳に失敗しました。" + streamError);
+                    var piece = node?["message"]?["content"]?.GetValue<string>();
+                    if (!string.IsNullOrEmpty(piece)) { answer.Append(piece); onChunk?.Invoke(piece); }
+                    if (node?["done"]?.GetValue<bool>() == true) break;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or HttpRequestException)
+            { throw new InvalidOperationException("翻訳の途中で Ollama との接続が切れました。もう一度翻訳してください。"); }
+            if (answer.Length == 0 || string.IsNullOrWhiteSpace(answer.ToString())) throw new InvalidOperationException("翻訳結果が空でした。もう一度翻訳してください。");
+            return answer.ToString().Trim();
         }
     }
 

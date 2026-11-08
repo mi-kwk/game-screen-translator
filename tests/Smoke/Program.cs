@@ -72,9 +72,24 @@ internal static class Program
     private static async Task VerifyTranslationAsync()
     {
         using var http = new HttpClient(new Stub());
-        var result = await new TranslationService(http).TranslateAsync("Hello", Settings);
+        var pieces = new List<string>();
+        var result = await new TranslationService(http).TranslateAsync("Hello", Settings, pieces.Add);
         if (result != "こんにちは") throw new Exception("Translation parsing failed: " + result);
-        Console.WriteLine("PASS: Ollama request and response (mock)");
+        if (!pieces.SequenceEqual(new[] { "こん", "にちは\n" })) throw new Exception("Streaming pieces mismatch: " + string.Join("|", pieces));
+        Console.WriteLine("PASS: Ollama streaming request and response (mock)");
+
+        using var broken = new HttpClient(new Stub(streamError: true));
+        await ExpectError(() => new TranslationService(broken).TranslateAsync("Hello", Settings), "out of memory");
+        Console.WriteLine("PASS: error in the middle of the stream (mock)");
+
+        using var slow = new HttpClient(new Slow());
+        using var cancel = new CancellationTokenSource();
+        var received = new List<string>();
+        var task = new TranslationService(slow).TranslateAsync("Hello", Settings, piece => { received.Add(piece); cancel.Cancel(); }, cancel.Token);
+        try { await task; throw new Exception("Expected cancellation"); }
+        catch (OperationCanceledException) { }
+        if (!received.SequenceEqual(new[] { "途中" })) throw new Exception("Cancel: unexpected pieces " + string.Join("|", received));
+        Console.WriteLine("PASS: cancel while translating keeps the received part (mock)");
 
         using var missing = new HttpClient(new Stub(HttpStatusCode.NotFound));
         await ExpectError(() => new TranslationService(missing).TranslateAsync("Hello", Settings), "ollama pull test-model");
@@ -90,7 +105,7 @@ internal static class Program
         throw new Exception("Expected error containing: " + expected);
     }
 
-    private sealed class Stub(HttpStatusCode code = HttpStatusCode.OK) : HttpMessageHandler
+    private sealed class Stub(HttpStatusCode code = HttpStatusCode.OK, bool streamError = false) : HttpMessageHandler
     {
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
@@ -98,12 +113,41 @@ internal static class Program
             var system = body["messages"]![0]!["content"]!.GetValue<string>();
             var user = body["messages"]![1]!["content"]!.GetValue<string>();
             if (request.RequestUri!.ToString() != "http://127.0.0.1:11434/api/chat" || body["model"]!.GetValue<string>() != "test-model"
-                || body["stream"]!.GetValue<bool>() || !system.Contains("Active Matter") || !system.Contains("raid = レイド") || !user.Contains("Hello"))
+                || !body["stream"]!.GetValue<bool>() || !system.Contains("Active Matter") || !system.Contains("raid = レイド") || !user.Contains("Hello"))
                 throw new Exception("Unexpected translation request: " + body.ToJsonString());
-            var content = code == HttpStatusCode.OK
-                ? "{\"message\":{\"role\":\"assistant\",\"content\":\"こんにちは\\n\"}}"
-                : "{\"error\":\"model 'test-model' not found\"}";
-            return new(code) { Content = new StringContent(content, Encoding.UTF8, "application/json") };
+            var content = code != HttpStatusCode.OK
+                ? "{\"error\":\"model 'test-model' not found\"}"
+                : streamError
+                    ? "{\"message\":{\"content\":\"こん\"},\"done\":false}\n{\"error\":\"out of memory\"}\n"
+                    : "{\"message\":{\"content\":\"こん\"},\"done\":false}\n{\"message\":{\"content\":\"にちは\\n\"},\"done\":false}\n{\"message\":{\"content\":\"\"},\"done\":true}\n";
+            return new(code) { Content = new StringContent(content, Encoding.UTF8, "application/x-ndjson") };
+        }
+    }
+
+    /// <summary>1 行目を返したあと、止められるまで次の行を返さない Ollama の代わり。</summary>
+    private sealed class Slow : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new SlowStream()) });
+
+        private sealed class SlowStream : Stream
+        {
+            private readonly byte[] first = Encoding.UTF8.GetBytes("{\"message\":{\"content\":\"途中\"},\"done\":false}\n");
+            private bool sent;
+            public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+            {
+                if (!sent) { sent = true; first.CopyTo(buffer); return first.Length; }
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+                return 0;
+            }
+            public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+            public override bool CanRead => true; public override bool CanSeek => false; public override bool CanWrite => false;
+            public override long Length => throw new NotSupportedException();
+            public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+            public override void Flush() { }
+            public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+            public override void SetLength(long value) => throw new NotSupportedException();
+            public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
         }
     }
 
