@@ -174,6 +174,18 @@ public sealed partial class TranslationService(HttpClient client)
     [GeneratedRegex(@"[A-Za-z]+(?:'[A-Za-z]+)?")]
     private static partial Regex WordPattern();
 
+    /// <summary>モデルを GPU のメモリからすぐに外す(Ollama は通常、最後に使ってから 5 分間置いたままにする)。</summary>
+    public async Task UnloadAsync(AppSettings settings, string model)
+    {
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var body = new JsonObject { ["model"] = model.Trim(), ["keep_alive"] = 0 };
+            using var response = await client.PostAsJsonAsync(settings.OllamaUrl.Trim().TrimEnd('/') + "/api/generate", body, timeout.Token);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException) { /* Ollama が止まっていれば、もともと空いている */ }
+    }
+
     private static string ErrorMessage(string content)
     {
         try { return JsonNode.Parse(content)?["error"]?.GetValue<string>() ?? ""; }
@@ -183,6 +195,9 @@ public sealed partial class TranslationService(HttpClient client)
 
 /// <summary>ゲームごとの設定。名前と説明は翻訳の指示に入れ、単語辞書はそのゲームの用語集として使う。</summary>
 public record GameProfile(string Name, string Description, string Glossary);
+
+/// <summary>窓の位置と大きさ(WPF の単位)。</summary>
+public record WindowBounds(double Left, double Top, double Width, double Height);
 
 public record AppSettings
 {
@@ -197,6 +212,18 @@ public record AppSettings
     public string SelectedGame { get; init; } = "";
     /// <summary>日本語訳の文字の大きさ。</summary>
     public double FontSize { get; init; } = 17;
+
+    // ---- 画面の見張り ----
+    /// <summary>見張るときに使うモデル(ゲームと GPU を分け合うので、小さめのモデルが向く)。</summary>
+    public string WatchModel { get; init; } = "gemma3:12b";
+    /// <summary>画面を撮る間隔(秒)。</summary>
+    public double WatchIntervalSeconds { get; init; } = 2;
+    /// <summary>小窓の濃さ(0.4〜1)。</summary>
+    public double OverlayOpacity { get; init; } = 0.9;
+    /// <summary>見張る範囲(物理ピクセル)。</summary>
+    public ScreenRect? WatchRegion { get; init; }
+    /// <summary>小窓の位置と大きさ。</summary>
+    public WindowBounds? OverlayBounds { get; init; }
 
     [System.Text.Json.Serialization.JsonIgnore]
     public GameProfile? CurrentGame => Games.FirstOrDefault(g => g.Name == SelectedGame);
@@ -274,6 +301,11 @@ public static class SettingsStore
             Games = games,
             SelectedGame = games.Any(g => g.Name == selected) ? selected : "",
             FontSize = loaded.FontSize is >= 10 and <= 40 ? loaded.FontSize : AppSettings.Default.FontSize,
+            WatchModel = string.IsNullOrWhiteSpace(loaded.WatchModel) ? AppSettings.Default.WatchModel : loaded.WatchModel,
+            WatchIntervalSeconds = Math.Clamp(loaded.WatchIntervalSeconds, 1, 10),
+            OverlayOpacity = Math.Clamp(loaded.OverlayOpacity, 0.4, 1),
+            WatchRegion = loaded.WatchRegion is { Width: >= 40, Height: >= 20 } ? loaded.WatchRegion : null,
+            OverlayBounds = loaded.OverlayBounds is { Width: >= 200, Height: >= 100 } ? loaded.OverlayBounds : null,
         };
     }
 

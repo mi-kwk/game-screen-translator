@@ -22,6 +22,9 @@ public partial class SettingsWindow : Window
         original = settings;
         Model.Text = settings.Model; OllamaUrl.Text = settings.OllamaUrl; AutoStart.IsChecked = settings.AutoStartOllama;
         CommonGlossary.Text = settings.CommonGlossary;
+        WatchModel.Text = settings.WatchModel;
+        WatchInterval.Text = settings.WatchIntervalSeconds.ToString("0.#");
+        OverlayOpacity.Value = Math.Round(settings.OverlayOpacity * 100);
         games = new(settings.Games.Select(g => new GameItem { Name = g.Name, Description = g.Description, Glossary = g.Glossary }));
         Games.ItemsSource = games;
         current = games.FirstOrDefault(g => g.Name == settings.SelectedGame);
@@ -77,6 +80,8 @@ public partial class SettingsWindow : Window
         if (names.Distinct().Count() != names.Count) { Message.Text = "同じ名前のゲームがあります。名前を変えてください。"; return; }
         if (string.IsNullOrWhiteSpace(Model.Text)) { Message.Text = "モデルを入力してください(例: gemma3:12b)。"; return; }
         if (!Uri.TryCreate(OllamaUrl.Text.Trim(), UriKind.Absolute, out _)) { Message.Text = "Ollama のアドレスが正しくありません(例: http://127.0.0.1:11434)。"; return; }
+        if (string.IsNullOrWhiteSpace(WatchModel.Text)) { Message.Text = "見張るときのモデルを入力してください(例: gemma3:12b)。"; return; }
+        if (!double.TryParse(WatchInterval.Text.Trim(), out var interval) || interval is < 1 or > 10) { Message.Text = "見張りの間隔は 1〜10 秒で入力してください。"; return; }
         var list = games.Select(g => new GameProfile(g.Name.Trim(), g.Description.Trim(), g.Glossary.Trim())).ToList();
         // 選んでいたゲームが残っていればそのまま(名前を変えていても追う)。無ければ、ゲームが 1 つだけのときはそれを選ぶ。
         var selected = current is not null && games.Contains(current) ? current.Name.Trim() : list.Count == 1 ? list[0].Name : "";
@@ -84,6 +89,7 @@ public partial class SettingsWindow : Window
         {
             Model = Model.Text.Trim(), OllamaUrl = OllamaUrl.Text.Trim(), AutoStartOllama = AutoStart.IsChecked == true,
             CommonGlossary = CommonGlossary.Text.Trim(), Games = list, SelectedGame = selected,
+            WatchModel = WatchModel.Text.Trim(), WatchIntervalSeconds = interval, OverlayOpacity = OverlayOpacity.Value / 100,
         };
         DialogResult = true;
     }
