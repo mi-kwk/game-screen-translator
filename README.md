@@ -1,6 +1,18 @@
 # game-screen-translator
 
 Windows + Shift + Sで撮ったゲーム画面の英語を日本語に翻訳するWindowsアプリ。
+英文の読み取り(Windows OCR)も翻訳(Ollama のローカル AI)もPCの中で行い、インターネットには送信しません。
+
+## 準備(初回のみ)
+1. [Ollama](https://ollama.com) をインストールします(`winget install --id Ollama.Ollama -e` でも可)。
+2. 翻訳に使うモデルをダウンロードします。GPU のメモリに合わせて選びます。
+   ```powershell
+   ollama pull gemma3:12b   # GPU メモリ 12GB 前後(例: RTX 3060)
+   ollama pull gemma3:27b   # GPU メモリ 24GB 前後(例: RTX 3090)
+   ```
+3. Windowsの英語OCR言語パックが必要です(英語の言語を追加しておく)。
+
+Ollama のアカウント登録は不要です。名前に `cloud` が付くモデルはインターネット上で動くため使いません。
 
 ## 起動
 .NET 10 SDKを用意し、リポジトリで以下を実行します。
@@ -8,31 +20,44 @@ Windows + Shift + Sで撮ったゲーム画面の英語を日本語に翻訳す�
 dotnet run --project src/GameScreenTranslator
 ```
 ## 使い方
-1. Windows + Shift + Sで英文の範囲を撮影。
+1. Windows + Shift + Sで英文の範囲を撮影。本文だけを選ぶと、ボタン名などが混ざらず訳がきれいになります。
 2. アプリを選び、Ctrl + Vまたは「画像を貼り付け」。
-3. 初回は「DeepL APIの設定」にAPIキーを入力し、API Free / Proを選んで保存。
-4. 英語と日本語訳を確認。英文を修正して「日本語に翻訳」で再翻訳できます。
+3. 英語と日本語訳を確認。英文を修正して「日本語に翻訳」で再翻訳できます。
 
-PNG/JPEG/BMPの読み込み、ドラッグ＆ドロップにも対応。APIキーがなくてもOCRは使用可能。
-Windowsの英語OCR言語パックが必要です。装飾文字や細かい文字では誤認識があります。
+PNG/JPEG/BMPの読み込み、ドラッグ＆ドロップにも対応。
+最初の1回はモデルの読み込みに30秒ほどかかります。2回目以降は短い文で数秒です。
+
+## 翻訳の設定
+画面下の「翻訳の設定(Ollama)」で変更し、「設定を保存」を押します。
+
+| 項目 | 内容 |
+|---|---|
+| モデル | 使う Ollama のモデル。初期値は `gemma3:12b` |
+| Ollama のアドレス | 初期値は `http://127.0.0.1:11434`(この PC の Ollama) |
+| ゲーム名 | 例: `Active Matter(脱出型のマルチプレイ FPS)`。訳の精度が上がります |
+| 単語辞書 | 1行に1語、`英語 = 訳語` の形。ゲームの用語の誤訳を防ぎます |
+
+単語辞書の例は [docs/glossary-activematter.txt](docs/glossary-activematter.txt) にあります。
 
 ## 配布用ビルド
 ```powershell
 dotnet publish src/GameScreenTranslator -c Release -r win-x64 --self-contained true -o artifacts/win-x64
 ```
 出力フォルダのGameScreenTranslator.exeを実行します。フォルダ全体を配布してください。
+使う PC にも Ollama とモデルが必要です。
 
 ## データの扱い
-OCRはPC内で実行。翻訳時は英文をDeepLに送信します。API利用料金・上限は契約プランに従います。
-APIキーはWindows DPAPIで現在のユーザー向けに暗号化し、LocalAppData/GameScreenTranslator/settings.binに保存。
-画像・翻訳履歴は保存しません。APIキーをGitHubやNotionに記載しないでください。
+OCRと翻訳はどちらもPC内で実行し、外部のサービスには送信しません。
+設定は LocalAppData/GameScreenTranslator/settings.json に保存します(秘密の情報は含みません)。
+画像・翻訳履歴は保存しません。
 
 ## 技術
-C# / .NET 10 / WPF / Windows.Media.Ocr / DeepL REST API。
+C# / .NET 10 / WPF / Windows.Media.Ocr / Ollama(ローカル LLM)。
 設計はdocs/design.md、動作確認手順はdocs/verification.mdを参照。
 
 ## 自動検証
-`dotnet run --project tests/Smoke -c Release`で画面初期化、実OCR、DPAPI、翻訳APIのモックテストを実行します。
+`dotnet run --project tests/Smoke -c Release`で画面初期化、実OCR、OCRの後処理、設定の保存、Ollamaとのやり取りのモックテストを実行します。
+Ollama が無くても実行できます。
 
 ## プロジェクト記録
 [Notion 設計・開発記録](https://app.notion.com/p/3f4232d7afe481cb9c2cf7265ab5903f)

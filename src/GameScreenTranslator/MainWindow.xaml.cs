@@ -7,23 +7,31 @@ using Microsoft.Win32;
 namespace GameScreenTranslator;
 public partial class MainWindow : Window
 {
-    private readonly HttpClient client = new() { Timeout = TimeSpan.FromSeconds(45) };
+    // モデルの初回読み込みと長文の翻訳に時間がかかるため、長めに待つ。
+    private readonly HttpClient client = new() { Timeout = TimeSpan.FromMinutes(3) };
     private BitmapSource? image;
     private bool busy;
     public MainWindow()
     {
         InitializeComponent();
-        try { var settings = SettingsStore.Load(); ApiKey.Password = settings.Key; Plan.SelectedIndex = settings.Pro ? 1 : 0; }
-        catch { Status.Text = "保存済み設定を読み込めませんでした。APIキーを設定し直してください。"; }
+        var settings = AppSettings.Default;
+        try { settings = SettingsStore.Load(); }
+        catch { Status.Text = "保存済みの設定を読み込めませんでした。初期設定で起動しました。"; }
+        ShowSettings(settings);
         Closed += (_, _) => client.Dispose();
     }
+    private void ShowSettings(AppSettings settings)
+    {
+        Model.Text = settings.Model; OllamaUrl.Text = settings.OllamaUrl;
+        GameName.Text = settings.GameName; Glossary.Text = settings.Glossary;
+    }
+    private AppSettings CurrentSettings() => new(OllamaUrl.Text.Trim(), Model.Text.Trim(), GameName.Text.Trim(), Glossary.Text.Trim());
     private async Task RunAsync(Func<Task> action)
     {
         if (busy) return;
         busy = true; Actions.IsEnabled = false;
         try { await action(); }
-        catch (TaskCanceledException) { Status.Text = "通信がタイムアウトしました。再試行してください。"; }
-        catch (HttpRequestException) { Status.Text = "翻訳サービスに接続できません。インターネット接続を確認してください。"; }
+        catch (TaskCanceledException) { Status.Text = "翻訳に時間がかかりすぎたため中止しました。英文を短くするか、小さいモデルを試してください。"; }
         catch (Exception ex) { Status.Text = ex.Message; }
         finally { busy = false; Actions.IsEnabled = true; }
     }
@@ -39,14 +47,14 @@ public partial class MainWindow : Window
         English.Text = await OcrService.ReadAsync(image);
         if (string.IsNullOrWhiteSpace(English.Text)) { Status.Text = "文字を検出できませんでした。文字が大きく写るように撮影してください。"; return; }
         Status.Text = "読み取り完了。英文を修正してから翻訳することもできます。";
-        if (AutoTranslate.IsChecked == true && !string.IsNullOrWhiteSpace(ApiKey.Password)) await TranslateAsync();
-        else if (AutoTranslate.IsChecked == true) Status.Text = "読み取り完了。自動翻訳するにはDeepL APIキーを設定してください。";
+        if (AutoTranslate.IsChecked == true) await TranslateAsync();
     }
     private async Task TranslateAsync()
     {
-        Japanese.Clear(); Status.Text = "日本語に翻訳しています…";
-        Japanese.Text = await new TranslationService(client).TranslateAsync(English.Text, ApiKey.Password, Plan.SelectedIndex == 1);
-        Status.Text = "翻訳が完了しました。";
+        Japanese.Clear(); Status.Text = "日本語に翻訳しています…(最初の 1 回はモデルの読み込みに時間がかかります)";
+        var started = DateTime.Now;
+        Japanese.Text = await new TranslationService(client).TranslateAsync(English.Text, CurrentSettings());
+        Status.Text = $"翻訳が完了しました({(DateTime.Now - started).TotalSeconds:F0} 秒)。";
     }
     private Task PasteAsync() => RunAsync(async () => {
         if (!Clipboard.ContainsImage()) throw new InvalidOperationException("クリップボードに画像がありません。Windows + Shift + Sで撮影してください。");
@@ -83,7 +91,7 @@ public partial class MainWindow : Window
     }
     private void SaveClick(object sender, RoutedEventArgs e)
     {
-        try { SettingsStore.Save(new(ApiKey.Password.Trim(), Plan.SelectedIndex == 1)); Status.Text = "設定を保存しました。"; }
+        try { SettingsStore.Save(CurrentSettings()); Status.Text = "設定を保存しました。"; }
         catch { Status.Text = "設定を保存できませんでした。"; }
     }
 }

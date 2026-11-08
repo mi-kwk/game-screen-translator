@@ -5,5 +5,23 @@
 <Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
 <Border Background="White" CornerRadius="10" Padding="12"><Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><TextBlock Text="スクリーンショット" FontWeight="Bold" Margin="0,0,0,12"/><ScrollViewer Grid.Row="1"><Image x:Name="Preview" Stretch="Uniform"/></ScrollViewer></Grid></Border>
 <Grid Grid.Column="2"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><TextBlock Text="読み取った英語（修正して再翻訳できます）" Margin="0,0,0,8"/><TextBox x:Name="English" Grid.Row="1" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/><TextBlock Grid.Row="2" Text="日本語訳" Margin="0,16,0,8"/><TextBox x:Name="Japanese" Grid.Row="3" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/></Grid></Grid>
-<StackPanel Grid.Row="3" Margin="0,16,0,0"><Expander Header="DeepL APIの設定"><StackPanel Margin="0,10,0,10"><TextBlock Text="翻訳時は英文のみをDeepLに送信します。APIキーはこのWindowsユーザー用に暗号化して保存します。"/><DockPanel Margin="0,8,0,0"><Button DockPanel.Dock="Right" Content="設定を保存" Click="SaveClick"/><ComboBox x:Name="Plan" DockPanel.Dock="Right" Width="110" SelectedIndex="0" Margin="8,0"><ComboBoxItem Content="API Free"/><ComboBoxItem Content="API Pro"/></ComboBox><PasswordBox x:Name="ApiKey" Padding="8"/></DockPanel></StackPanel></Expander><TextBlock x:Name="Status" Margin="0,10,0,0" TextWrapping="Wrap" Text="画像を貼り付けてください。" Foreground="#385777"/></StackPanel>
+<StackPanel Grid.Row="3" Margin="0,16,0,0">
+<Expander Header="翻訳の設定(Ollama)">
+<Grid Margin="0,10,0,10">
+<Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+<Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+<TextBlock Grid.ColumnSpan="4" TextWrapping="Wrap" Foreground="#526075" Text="翻訳はこの PC の Ollama で行い、インターネットには送信しません。設定はこの Windows ユーザーの LocalAppData に保存します。"/>
+<TextBlock Grid.Row="1" Text="モデル" VerticalAlignment="Center" Margin="0,8,8,0"/>
+<TextBox x:Name="Model" Grid.Row="1" Grid.Column="1" Margin="0,8,16,0" FontSize="14" Padding="6" ToolTip="例: gemma3:12b(RTX 3060 など)、gemma3:27b(RTX 3090 など)"/>
+<TextBlock Grid.Row="1" Grid.Column="2" Text="Ollama のアドレス" VerticalAlignment="Center" Margin="0,8,8,0"/>
+<TextBox x:Name="OllamaUrl" Grid.Row="1" Grid.Column="3" Margin="0,8,0,0" FontSize="14" Padding="6"/>
+<TextBlock Grid.Row="2" Text="ゲーム名" VerticalAlignment="Center" Margin="0,8,8,0"/>
+<TextBox x:Name="GameName" Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,8,0,0" FontSize="14" Padding="6" ToolTip="例: Active Matter(脱出型のマルチプレイ FPS)"/>
+<TextBlock Grid.Row="3" Text="単語辞書" Margin="0,8,8,0"/>
+<TextBox x:Name="Glossary" Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,8,0,0" FontSize="14" Padding="6" Height="110" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" ToolTip="1 行に 1 語。例: raid = レイド"/>
+<StackPanel Grid.Row="4" Grid.ColumnSpan="4" Orientation="Horizontal" Margin="0,10,0,0"><Button Content="設定を保存" Click="SaveClick"/><TextBlock VerticalAlignment="Center" Foreground="#526075" Text="単語辞書は 1 行に 1 語、「英語 = 訳語」の形で書きます。"/></StackPanel>
+</Grid>
+</Expander>
+<TextBlock x:Name="Status" Margin="0,10,0,0" TextWrapping="Wrap" Text="画像を貼り付けてください。" Foreground="#385777"/>
+</StackPanel>
 </Grid></Window>
