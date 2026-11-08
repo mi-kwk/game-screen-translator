@@ -24,6 +24,8 @@ public partial class MainWindow : Window
     private DateTime workingSince;
     private string workingLabel = "";
     private string translated = "";
+    // 最後に読み取った画像で、英語以外として外した文章の案内(翻訳の完了時にも表示する)
+    private string skippedNote = "";
 
     public MainWindow()
     {
@@ -142,9 +144,11 @@ public partial class MainWindow : Window
     {
         if (image is null) throw new InvalidOperationException("先に画像を貼り付けるか、画像ファイルを開いてください。");
         SetTranslation(""); Status.Text = "英語を読み取っています…";
-        English.Text = await OcrService.ReadAsync(image);
-        if (string.IsNullOrWhiteSpace(English.Text)) { Status.Text = "文字を検出できませんでした。文字が大きく写るように撮影してください。"; return; }
-        Status.Text = "読み取り完了。英文を修正してから翻訳することもできます。";
+        var read = await OcrService.ReadLayoutAsync(image);
+        English.Text = read.Text;
+        skippedNote = read.SkippedBlocks > 0 ? $"英語以外の文章({read.SkippedBlocks} か所)は翻訳から外しました。" : "";
+        if (string.IsNullOrWhiteSpace(English.Text)) { Status.Text = skippedNote + "英語の文字を検出できませんでした。文字が大きく写るように撮影してください。"; return; }
+        Status.Text = "読み取り完了。英文を修正してから翻訳することもできます。" + skippedNote;
         if (AutoTranslate.IsChecked == true) await TranslateAsync();
     }
     private async Task TranslateAsync()
@@ -168,7 +172,7 @@ public partial class MainWindow : Window
                 if (!renderTimer.IsEnabled) renderTimer.Start();
             }, cancel.Token);
             SetTranslation(result);
-            Status.Text = $"翻訳が完了しました({(DateTime.Now - workingSince).TotalSeconds:F0} 秒)。";
+            Status.Text = $"翻訳が完了しました({(DateTime.Now - workingSince).TotalSeconds:F0} 秒)。{skippedNote}";
         }
         catch (OperationCanceledException) when (cancel.IsCancellationRequested)
         {

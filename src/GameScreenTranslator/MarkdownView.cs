@@ -20,6 +20,7 @@ public static partial class MarkdownView
     private static readonly Brush QuoteBar = Brush("#93C5FD");
     private static readonly Brush CodeBack = Brush("#EEF2F7");
     private static readonly Brush Rule = Brush("#CBD5E1");
+    private static readonly Brush Separator = Brush("#94A3B8");
 
     public static FlowDocument ToDocument(string markdown, double fontSize)
     {
@@ -59,7 +60,8 @@ public static partial class MarkdownView
             if (RuleLine().IsMatch(line))
             {
                 EndParagraph(); EndLists();
-                document.Blocks.Add(new Paragraph { BorderBrush = Rule, BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(0, 8, 0, 8), FontSize = 2 });
+                // 画面上で欄が分かれていたところ。はっきり分かるように太めの線にする
+                document.Blocks.Add(new Paragraph { BorderBrush = Separator, BorderThickness = new Thickness(0, 2, 0, 0), Margin = new Thickness(0, 14, 0, 10), FontSize = 2, LineHeight = 2 });
                 continue;
             }
             if (ListLine().Match(line) is { Success: true } li)

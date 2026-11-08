@@ -14,7 +14,17 @@ using Windows.Storage.Streams;
 namespace GameScreenTranslator;
 public static partial class OcrService
 {
-    public static async Task<string> ReadAsync(BitmapSource image)
+    /// <summary>画像の英語を読み取り、画面上のまとまりごとに並べ直した英文を返す。</summary>
+    public static async Task<string> ReadAsync(BitmapSource image) => (await ReadLayoutAsync(image)).Text;
+
+    public static async Task<OcrArrangement> ReadLayoutAsync(BitmapSource image)
+    {
+        var lines = await ReadLinesAsync(image);
+        var arranged = OcrLayout.Arrange(lines);
+        return arranged with { Text = Cleanup(arranged.Text) };
+    }
+
+    public static async Task<IReadOnlyList<OcrLineBox>> ReadLinesAsync(BitmapSource image)
     {
         var engine = OcrEngine.TryCreateFromLanguage(new Language("en-US"))
             ?? throw new InvalidOperationException("英語のOCRが利用できません。Windowsの設定で英語の言語パックを追加してください。");
@@ -32,7 +42,14 @@ public static partial class OcrService
         var decoder = await Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(stream);
         using var bitmap = await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
         var result = await engine.RecognizeAsync(bitmap);
-        return Cleanup(string.Join(Environment.NewLine, result.Lines.Select(line => line.Text)));
+        return result.Lines.Where(line => line.Words.Count > 0).Select(line =>
+        {
+            var left = line.Words.Min(w => w.BoundingRect.X);
+            var top = line.Words.Min(w => w.BoundingRect.Y);
+            var right = line.Words.Max(w => w.BoundingRect.X + w.BoundingRect.Width);
+            var bottom = line.Words.Max(w => w.BoundingRect.Y + w.BoundingRect.Height);
+            return new OcrLineBox(line.Text, left, top, right - left, bottom - top);
+        }).ToList();
     }
 
     /// <summary>OCR がよく間違える、数字に挟まれた英字の O を 0 に直す(例: 0.4.O.192 → 0.4.0.192)。</summary>
@@ -42,7 +59,7 @@ public static partial class OcrService
     private static partial Regex DigitO();
 }
 
-public sealed class TranslationService(HttpClient client)
+public sealed partial class TranslationService(HttpClient client)
 {
     private const string BasePrompt = """
         あなたはゲームの英語テキストを日本語に翻訳する翻訳者です。
@@ -52,6 +69,8 @@ public sealed class TranslationService(HttpClient client)
         - 画面の UI の断片(ボタン名、日付、数字だけの行、ゲームのロゴ、意味のない文字列)は省く。
         - 原文の意味を足したり減らしたりしない。否定・肯定を取り違えない。
         - 翻訳文だけを出力し、説明や前置きは書かない。
+        - 原文の英語の文をそのまま出力に含めない。英文を書き写してから訳す、という書き方はしない。
+        - 「---」だけの行は、画面上で欄が分かれている区切り。訳でも同じ位置に「---」の行を残す。
 
         出力は読みやすい Markdown にする。
         - 記事やセクションの見出しは「## 見出し」、小見出しは「### 小見出し」にする。
@@ -128,9 +147,32 @@ public sealed class TranslationService(HttpClient client)
             catch (Exception ex) when (ex is IOException or HttpRequestException)
             { throw new InvalidOperationException("翻訳の途中で Ollama との接続が切れました。もう一度翻訳してください。"); }
             if (answer.Length == 0 || string.IsNullOrWhiteSpace(answer.ToString())) throw new InvalidOperationException("翻訳結果が空でした。もう一度翻訳してください。");
-            return answer.ToString().Trim();
+            return RemoveEchoedEnglish(answer.ToString(), text).Trim();
         }
     }
+
+    /// <summary>
+    /// モデルが原文の英文を書き写した段落を取り除く(訳の段落は残す)。
+    /// 英字が大半で 8 語以上あり、単語の 6 割以上が原文に出てくる段落を「書き写し」とみなす。
+    /// </summary>
+    public static string RemoveEchoedEnglish(string answer, string source)
+    {
+        var sourceWords = new HashSet<string>(WordPattern().Matches(source).Select(m => m.Value.ToLowerInvariant()));
+        var paragraphs = Regex.Split(answer.Replace("\r\n", "\n"), @"\n[ \t]*\n");
+        var kept = paragraphs.Where(p =>
+        {
+            var letters = p.Count(char.IsLetter);
+            if (letters == 0) return true;
+            var latin = p.Count(c => c is >= 'A' and <= 'Z' or >= 'a' and <= 'z');
+            var words = WordPattern().Matches(p).Select(m => m.Value.ToLowerInvariant()).ToList();
+            var echoed = (double)latin / letters >= 0.8 && words.Count >= 8 && words.Count(sourceWords.Contains) >= words.Count * 0.6;
+            return !echoed;
+        });
+        return string.Join("\n\n", kept);
+    }
+
+    [GeneratedRegex(@"[A-Za-z]+(?:'[A-Za-z]+)?")]
+    private static partial Regex WordPattern();
 
     private static string ErrorMessage(string content)
     {

@@ -39,6 +39,8 @@ internal static class Program
                 throw new Exception("OCR mismatch: " + recognized);
             Console.WriteLine("PASS: local English OCR: " + recognized);
             VerifyOcrCleanup();
+            VerifyOcrLayout();
+            VerifyEchoRemoval();
             VerifySettings();
             VerifyPrompt();
             VerifyMarkdown();
@@ -65,6 +67,47 @@ internal static class Program
         foreach (var (input, expected) in cases)
             if (OcrService.Cleanup(input) != expected) throw new Exception($"OCR cleanup: {input} -> {OcrService.Cleanup(input)}");
         Console.WriteLine("PASS: OCR cleanup of O/0 confusion");
+    }
+
+    private static void VerifyOcrLayout()
+    {
+        // 左の本文、右の欄(英語の OCR で崩れたロシア語)、下の本文、タブの並び
+        var lines = new List<OcrLineBox>
+        {
+            new("Upcoming Raid \"Icarus Offices\": America is Going Higher", 20, 10, 600, 30),
+            new("Operatives are already familiar with these colossal towers looming on the horizon.", 20, 60, 980, 18),
+            new("The Agency has long suspected this district was the epicenter of the incident.", 20, 84, 980, 18),
+            new("neAb1 rpß3Hb1X Aen", 790, 230, 200, 18),
+            new("Kopnopauvw•l Icarus yxe", 790, 254, 200, 18),
+            new("Bcr1f1b1Banv•1 B «L4ewpe", 790, 278, 200, 18),
+            new("3T0 6b1na f1VIU1b aepxyuxa", 790, 302, 200, 18),
+            new("Grim traces of the Icarus Corporation's illicit experiments have already surfaced.", 20, 620, 980, 18),
+            new("Uncovering what Icarus was truly up to means taking on peculiar new investigations.", 20, 644, 980, 18),
+            new("11 h 6", 20, 700, 40, 18),
+            new("Update 0.4.0.164", 20, 820, 120, 18),
+            new("Update 0.4.0.165", 300, 820, 120, 18),
+            new("Server update", 600, 820, 120, 18),
+        };
+        var result = OcrLayout.Arrange(lines);
+        var parts = result.Text.Split("\n\n---\n\n");
+        if (result.SkippedBlocks != 1 || parts.Length != 3 || result.Text.Contains("neAb1") || result.Text.Contains("11 h 6")
+            || !parts[0].StartsWith("Upcoming Raid") || !parts[0].Contains("The Agency has long") || !parts[1].StartsWith("Grim traces")
+            || parts[2] != "Update 0.4.0.164\nUpdate 0.4.0.165\nServer update")
+            throw new Exception("OCR layout: skipped=" + result.SkippedBlocks + "\n" + result.Text);
+        if (OcrLayout.LooksEnglish("neAb1 rpß3Hb1X Aen Kopnopauvw•l Icarus yxe Bcr1f1b1Banv•1 B «L4ewpe 3T0 6b1na f1VIU1b aepxyuxa")
+            || !OcrLayout.LooksEnglish("Fixed a rare bug that caused a sniper scope lens to disappear."))
+            throw new Exception("LooksEnglish");
+        Console.WriteLine("PASS: OCR layout blocks, separators and skipping non-English text");
+    }
+
+    private static void VerifyEchoRemoval()
+    {
+        const string source = "Grim traces of the Icarus Corporation's illicit experiments have already surfaced across Downtown, but intelligence suggests that was merely the tip of the iceberg.";
+        const string answer = "## 見出し\n\nGrim traces of the Icarus Corporation's illicit experiments have already surfaced across Downtown, but intelligence suggests that was merely the tip of the iceberg.\n\nIcarus Corporation の不正な実験の痕跡は既に Downtown 全域に現れています。\n\n---\n\n「Icarus Offices」近日公開。";
+        var cleaned = TranslationService.RemoveEchoedEnglish(answer, source);
+        if (cleaned.Contains("Grim traces") || !cleaned.Contains("不正な実験") || !cleaned.Contains("---") || !cleaned.Contains("「Icarus Offices」"))
+            throw new Exception("Echo removal: " + cleaned);
+        Console.WriteLine("PASS: remove English paragraphs copied from the source");
     }
 
     private static void VerifySettings()
