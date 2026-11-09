@@ -45,6 +45,8 @@ internal static class Program
             VerifyPrompt();
             VerifyMarkdown();
             VerifyLauncher();
+            VerifyWatchHelpers();
+            VerifyWatcherAsync().GetAwaiter().GetResult();
             var settingsWindow = new SettingsWindow(Settings);
             Console.WriteLine("PASS: settings window initializes");
             settingsWindow.Close();
@@ -157,6 +159,62 @@ internal static class Program
         if (plain.Contains("**") || plain.Contains("##") || !plain.Contains("・回答 1") || !plain.Contains("1. 手順") || !plain.StartsWith("戦闘と戦利品"))
             throw new Exception("Markdown plain text: " + plain);
         Console.WriteLine("PASS: Markdown rendering and plain text for copy");
+    }
+
+    private static BitmapSource Frame(byte shade, int boxX = -1)
+    {
+        const int w = 60, h = 30;
+        var pixels = new byte[w * h * 4];
+        for (var i = 0; i < pixels.Length; i += 4) { pixels[i] = pixels[i + 1] = pixels[i + 2] = shade; pixels[i + 3] = 255; }
+        if (boxX >= 0)
+            for (var y = 5; y < 25; y++) for (var x = boxX; x < boxX + 20; x++) { var i = (y * w + x) * 4; pixels[i] = pixels[i + 1] = pixels[i + 2] = 0; }
+        var frame = BitmapSource.Create(w, h, 96, 96, PixelFormats.Bgra32, null, pixels, w * 4);
+        frame.Freeze();
+        return frame;
+    }
+
+    private static byte[] PixelsOf(BitmapSource frame) { var p = new byte[frame.PixelWidth * 4 * frame.PixelHeight]; frame.CopyPixels(p, frame.PixelWidth * 4, 0); return p; }
+
+    private static void VerifyWatchHelpers()
+    {
+        var a = PixelsOf(Frame(200)); var b = PixelsOf(Frame(200, boxX: 10));
+        if (ScreenWatcher.FrameDifference(a, a, 60, 30) != 0 || ScreenWatcher.FrameDifference(a, b, 60, 30) < 0.1) throw new Exception("FrameDifference");
+        if (ScreenWatcher.TextSimilarity("Fixed a rare bug that caused a sniper scope lens to disappear.", "Fixed a rare bug that caused a sniper scope Iens to disappear.") < ScreenWatcher.SameTextThreshold
+            || ScreenWatcher.TextSimilarity("Open the door.", "Server maintenance is scheduled.") > 0.3) throw new Exception("TextSimilarity");
+        if (!new ScreenRect(0, 0, 100, 100).IntersectsWith(new ScreenRect(50, 50, 100, 100)) || new ScreenRect(0, 0, 100, 100).IntersectsWith(new ScreenRect(100, 0, 50, 50)))
+            throw new Exception("ScreenRect.IntersectsWith");
+        var shot = ScreenCapture.Capture(new ScreenRect(0, 0, 120, 60));
+        if (shot.PixelWidth != 120 || shot.PixelHeight != 60) throw new Exception("ScreenCapture size");
+        Console.WriteLine("PASS: frame difference, text similarity and screen capture");
+    }
+
+    private static async Task VerifyWatcherAsync()
+    {
+        // 画面 A → (変化) → 画面 B → 読み違い程度の違いの画面 C。A の翻訳は遅く、B が出たら止められるはず
+        var frameA = Frame(200, boxX: 5); var frameB = Frame(200, boxX: 30); var frameC = Frame(200, boxX: 31);
+        var queue = new Queue<BitmapSource>([frameA, frameA, frameA, frameB, frameB, frameB, frameC, frameC, frameC]);
+        var last = frameA;
+        var texts = new Dictionary<BitmapSource, string> { [frameA] = "Text on screen A appears here.", [frameB] = "Something different on screen B now.", [frameC] = "Something different on screen B now" };
+        var requested = new List<string>(); var completed = new List<string>(); var states = new List<WatchState>();
+        var watcher = new ScreenWatcher(
+            () => Task.FromResult(queue.Count > 0 ? last = queue.Dequeue() : last),
+            frame => Task.FromResult(new OcrArrangement(texts[frame], 0)),
+            async (text, onChunk, token) =>
+            {
+                requested.Add(text);
+                if (text.Contains("screen A")) await Task.Delay(Timeout.Infinite, token); // 遅い翻訳
+                onChunk("訳"); return "訳:" + text;
+            }) { Interval = TimeSpan.FromMilliseconds(15) };
+        watcher.TranslationCompleted += completed.Add;
+        watcher.StateChanged += (s, _) => states.Add(s);
+        watcher.Start();
+        for (var i = 0; i < 200 && (queue.Count > 0 || completed.Count == 0); i++) await Task.Delay(15);
+        await Task.Delay(100);
+        watcher.Stop();
+        if (requested.Count != 2 || !requested[0].Contains("screen A") || !requested[1].Contains("screen B")
+            || completed.Count != 1 || !completed[0].Contains("screen B") || !states.Contains(WatchState.Translating) || states[^1] != WatchState.Off)
+            throw new Exception($"ScreenWatcher: requested={string.Join(" | ", requested)} completed={string.Join(" | ", completed)}");
+        Console.WriteLine("PASS: watcher translates only new text and replaces a slow translation");
     }
 
     private static void VerifyLauncher()
